@@ -1,22 +1,26 @@
 // this file is used for registration, login functions/process
 const User = require("../models/user.model");
 const bcrypt = require("bcrypt");
+// const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
+const transporter = require("./nodemailer")
 
 
 const genSalt = 10;
-export const Registration = async (req, res)=>{
+exports.Registration = async (req, res)=>{
     const {userName, userEmail, userPassword } = req.body;
+    console.log(`userName:${userName}\nuserEmail:${userEmail}\nuserPassword:${userPassword}`)
     try
     {
-        if (!userName || !userPassword || userEmail)
+        if (!userName || !userPassword || !userEmail)
         {
             return res.json({success:false, msg:'Invalid Input'});
         }
 
         // check if the user Exists
-        const checkUserName = User.findOne({email:userEmail});
-        const checkUserEmail = User.findOne({user:userName});
+        const checkUserName = await User.findOne({email:userEmail});
+        const checkUserEmail = await User.findOne({user:userName});
+  
         if (checkUserName)
         {
             return res.json({success:false, msg:'Username already exist '})
@@ -28,6 +32,16 @@ export const Registration = async (req, res)=>{
         const passHash = await bcrypt.hash(userPassword, genSalt);
         const new_user = await User.create({username:userName, email:userEmail,  password:passHash});
 
+        const mailOptions = {
+            from: process.env.SMPT_SENDER_EMAIL,
+            to: userEmail,
+            subject:"Welcome to MernAuth",
+            text: `Welcome to MernAuth Website YOur email has been created with ${new_user._id}`
+        }
+	
+        const info = await transporter.sendMail(mailOptions);
+        console.log('this is info:')
+        console.log(info);
         if (new_user)
         {
             res.status(200).json({success:true, msg:"User Successfully Created"})
@@ -37,11 +51,13 @@ export const Registration = async (req, res)=>{
     catch(err)
     {
         console.log(`Error: ${err}`);
+        return res.status(500).json({success:false, msg:`Error: ${err.message}`});
+
     }
     
 }
 
-export const Login = async (req, res)=>{
+exports.Login = async (req, res)=>{
     const {userEmail, userPassword} = req.body;
     if (!userEmail || !userPassword)
     {
@@ -64,11 +80,11 @@ export const Login = async (req, res)=>{
         }
 
         const token = jwt.sign({id:foundUser._id}, process.env.JWT_TOKEN_SCRT, {expiresIn: '40m'});
-        res.cookie('cookie', token, {
+        res.cookie('authCookie', token, {
             httpOnly: true, 
             secure: true, // only sent over HTTPS
             sameSite: 'strict',  // prevents CSRF(cross script resource forgery)
-            maxAge: '1000 * 60 * 60' // hour
+            maxAge: 1000 * 60 * 60 // hour
         });
 
         return res.status(200).json({success:true, token:token,  data:foundUser});
@@ -77,5 +93,24 @@ export const Login = async (req, res)=>{
     catch(err)
     {
         console.log(`Error: ${err}`);
+        return res.status(500).json({success:false, msg:`Error: ${err.message}`});
+
+    }
+}
+
+exports.Logout = async (req, res)=>{
+    try
+    {
+        res.clearCookie('authCookie', {
+            httpOnly: true, 
+            sameSite: true, 
+            secure: 'strict'
+        })
+        return res.status(200).json({success:true, msg:"Cookies cleared"});
+    }
+    catch(err)
+    {
+        return req.status(500).json({success:false, msg:`Error: ${err.message}`});
+        console.log(`Error: ${err}`)
     }
 }
