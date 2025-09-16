@@ -11,7 +11,7 @@ const UserSchema = new mongoose.Schema({
     resetOtpExpiresIn: {type:Number, default:0}
 })
 
-const User = mongoose.model('User', UserSchebma);
+const User = mongoose.model('User', UserSchema);
 module.exports = User; 
 
 // 0768676929
