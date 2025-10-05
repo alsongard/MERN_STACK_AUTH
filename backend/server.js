@@ -3,7 +3,7 @@ require("dotenv").config();
 const cookieparser = require("cookie-parser");
 const express = require("express");
 const connectDB = require("./config/connectDB");
-
+const authRouter = require("./routes/authRouter");
 const app = express()
 
 
@@ -21,6 +21,8 @@ app.use(cors(coroptions))
 app.get("/", (req,res)=>{
     res.send("<h1>Welcome Home</h1>")
 })
+
+app.use("/api/auth", authRouter)
 
 
 connectDB();
