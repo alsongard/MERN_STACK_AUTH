@@ -42,12 +42,19 @@ module.exports.Registration = async (req, res)=>{
             text: `Welcome to MernAuth Website YOur email has been created with ${new_user._id}`
         }
 	
-        const info = await transporter.sendMail(mailOptions);
-        console.log('this is info:')
-        console.log(info);
+        await transporter.sendMail(mailOptions);
+        const token = jwt.sign({id:new_user._id}, process.env.JWT_TOKEN_SCRT, {expiresIn: '40m'});
+        
+        console.log(`token: ${token}`);
+        res.cookie('authCookie', token, {
+            httpOnly: true, 
+            secure: false, // only sent over HTTPS
+            sameSite: 'strict',  // prevents CSRF(cross script resource forgery)
+            maxAge: 1000 * 60 * 60 // hour
+        });
         if (new_user)
         {
-            res.status(200).json({success:true, msg:"User Successfully Created"})
+            return res.status(200).json({success:true, msg:"User Successfully Created"})
         }
 
     }
@@ -82,13 +89,7 @@ module.exports.Login = async (req, res)=>{
             return res.status(401).json({success:false, msg:"Invalid Password"});
         }
 
-        const token = jwt.sign({id:foundUser._id}, process.env.JWT_TOKEN_SCRT, {expiresIn: '40m'});
-        res.cookie('authCookie', token, {
-            httpOnly: true, 
-            secure: true, // only sent over HTTPS
-            sameSite: 'strict',  // prevents CSRF(cross script resource forgery)
-            maxAge: 1000 * 60 * 60 // hour
-        });
+
 
         return res.status(200).json({success:true, token:token,  data:foundUser});
 
@@ -118,11 +119,12 @@ module.exports.Logout = async (req, res)=>{
     }
 }
 
-
-module.exports.sendVerifyOtpToEmail = async (req, res)=>{
+// this is used for verifying otp
+module.exports.sendVerifyOtp = async (req, res)=>{
     try
     {
-        const {userId} = req.body;
+        const userId = req.userId;
+        console.log(`userId: ${userId}`);
         if (!userId)
         {
             return res.status(400).json({success:false, msg:"No user_id given"});
@@ -139,30 +141,30 @@ module.exports.sendVerifyOtpToEmail = async (req, res)=>{
         {
            return res.status(409).json({success:false, msg: `User with id : ${userId} verified`}) 
         }
-        Math.floor(Math.random()*10)
+        // Math.floor(Math.random()*10)
         // const otpp = Math.floor(100000+Math.random()*900000);
         const otp =  crypto.randomInt(100000,1000000)
         console.log(`this is otp: ${otp}`);
         // foundUser.isAccountVerified = true;
 
-        foundUser.verifyOtp =otp;
+        foundUser.verifyOtp = otp;
         // const new_date  = Date.now() + 24 * 60 * 60 * 1000;
         foundUser.verifyOtpExpiresIn = Date.now() + 10 * 60 * 1000;
         await foundUser.save();
 
+        console.log(foundUser.email);
 
         // after creating the otp we need to send it to the useremail
         const mailOptions = {
             from: process.env.SMPT_SENDER_EMAIL,
-            to: userEmail,
+            to: foundUser.email,
             subject:"Account Verification OTP",
-            body: `Your account verification otp is ${otp}`
+            text: `Your account verification otp is ${otp}`
         }
 
         await transporter.sendMail(mailOptions);
-        console.log(info);
 
-        res.json({success:true, msg:'Verfication otp sent to email'})
+        return res.json({success:true, msg:'Verfication otp sent to email'})
 
     }
     catch(err)
@@ -178,9 +180,10 @@ module.exports.sendVerifyOtpToEmail = async (req, res)=>{
 
 
 
-
+// verifying email Account: geting otp from front-end
 module.exports.verifyEmailAccount = async (req,res)=>{
-    const {userOtp,  userId} = req.body;
+    const {userOtp} = req.body;
+    const {userId} = req;
     if (!userOtp || !userId)
     {
         return res.status(400).json({success:false, msg:"Invalid Input"})
